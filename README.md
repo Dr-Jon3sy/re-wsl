@@ -11,7 +11,7 @@ A native WSL2 reverse-engineering environment designed for use with [Claude Code
 From an Ubuntu WSL2 shell:
 
 ```sh
-cd ~/projects/re-wsl
+cd ~/re-wsl
 bash scripts/setup-wsl.sh
 source scripts/env.sh
 bash scripts/doctor.sh
@@ -57,7 +57,7 @@ If you use `direnv`, the included `.envrc` sources `scripts/env.sh`; `direnv` it
 
 ## WSL notes
 
-- Keep the checkout on WSL's native Linux filesystem (for example, `~/projects/re-wsl`). `/mnt/c` is substantially slower for virtual environments, `node_modules`, Ghidra, and large decompilations.
+- Keep the checkout on WSL's native Linux filesystem. `/mnt/c` is substantially slower for virtual environments, `node_modules`, Ghidra, and large decompilations.
 - WSLg is sufficient for the Ghidra GUI on current Windows installations. `analyzeHeadless` works without a GUI.
 - USB access from WSL requires attaching the device to WSL (commonly with `usbipd-win`) before Linux tools can see it.
 - Packet capture and raw USB/I2C access may still require `sudo` or device-specific udev/group permissions.
