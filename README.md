@@ -8,7 +8,7 @@ A native WSL2 reverse-engineering environment designed for use with [OpenAI Code
 
 ## Quick start
 
-Prerequisites: Ubuntu on WSL2, `uv`, and [Codex](https://learn.chatgpt.com/docs/windows/wsl) or Claude Code installed inside WSL.
+Prerequisites: Ubuntu on WSL2, npm, and `uv`.
 
 Run once:
 
@@ -17,18 +17,15 @@ git clone git@github.com:Dr-Jon3sy/re-wsl.git ~/re-wsl
 cd ~/re-wsl
 bash scripts/setup-wsl.sh
 source scripts/env.sh
-codex
 ```
 
 Next time:
 
 ```sh
-cd ~/re-wsl && source scripts/env.sh && codex
+cd ~/re-wsl && source scripts/env.sh
 ```
 
-Use `claude` instead of `codex` if preferred. Put samples in `inputs/`; use `bash scripts/setup-wsl.sh --full` only when you need the larger optional toolset.
-
-Codex reads `AGENTS.md` and `.agents/skills/`. Claude Code reads the equivalent `CLAUDE.md` and `.claude/skills/` files.
+The environment works best with OpenAI Codex CLI; Claude Code is also supported. Put samples in `inputs/`; use `bash scripts/setup-wsl.sh --full` only when you need the larger optional toolset.
 
 ## How it works
 
