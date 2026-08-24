@@ -1,63 +1,107 @@
 # re-shell
 
-> [!NOTE]
-> This project is a WSL-focused fork of [schlarpc/re-shell](https://github.com/schlarpc/re-shell/), created by Chaz Schlarp. The original project provides the reverse-engineering environment and discipline documentation; this fork replaces its Nix-based setup with native Ubuntu packages, `uv`, npm, and WSL-specific tooling.
-> I just don't use nix and don't want to learn :)
+Set up a reverse-engineering environment on Ubuntu under Windows Subsystem for Linux 2 (WSL2). The environment includes Ghidra, radare2, Frida, mitmproxy, YARA, Android tools, network tools, and Python libraries. It uses `uv` and `npm` instead of Nix.
 
-A native WSL2 reverse-engineering environment designed for use with [OpenAI Codex](https://developers.openai.com/codex/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code). It uses Ubuntu packages for system tools, `uv` for a locked Python 3.13 environment, npm for Node.js dependencies, and an official Ghidra release installed inside the project. Nix is not required.
+The environment works best with the OpenAI Codex command-line interface (CLI). Claude Code is also supported.
 
-## Quick start
+## Prerequisites
 
-Prerequisites: Ubuntu on WSL2, npm, and `uv`.
+You need the following software and access:
 
-Run once:
+- Ubuntu on WSL2
+- Git with Secure Shell (SSH) access to GitHub
+- `npm`
+- `uv`
+- A WSL user with `sudo` access
 
-```sh
-git clone git@github.com:Dr-Jon3sy/re-wsl.git ~/re-wsl
-cd ~/re-wsl
-bash scripts/setup-wsl.sh
-source scripts/env.sh
-```
+Keep the repository under your Linux home directory, such as `~/re-wsl`. Paths under `/mnt/c` are slower for virtual environments, `node_modules`, Ghidra projects, and decompilation output.
 
-Next time:
+## Set up the environment
 
-```sh
-cd ~/re-wsl && source scripts/env.sh
-```
+1. Clone the repository:
 
-The environment works best with OpenAI Codex CLI; Claude Code is also supported. Put samples in `inputs/`; use `bash scripts/setup-wsl.sh --full` only when you need the larger optional toolset.
+   ```sh
+   git clone git@github.com:Dr-Jon3sy/re-wsl.git ~/re-wsl
+   ```
 
-## How it works
+2. Go to the repository:
 
-The environment combines Ghidra, radare2, Frida, mitmproxy, YARA, Android tools, network tools, Python libraries, and more. Codex and Claude Code are configured with discipline-specific **skills** that activate based on file type and context:
+   ```sh
+   cd ~/re-wsl
+   ```
 
-| Skill | Activates on | Example files |
-|-------|-------------|---------------|
-| Windows RE | PE binaries, .NET assemblies, drivers | `.exe`, `.dll`, `.sys` |
-| Android RE | Android packages, DEX bytecode | `.apk`, `.xapk` |
-| Web RE | HTTP captures, API traffic, protobufs | `.har`, `.proto` |
+3. Install the toolset:
 
-When an agent detects relevant context, the matching skill loads specialized tool documentation and workflows -- no manual configuration needed.
+   ```sh
+   bash scripts/setup-wsl.sh
+   ```
 
-## Adding tools
+   The setup script installs the Ubuntu packages, creates the locked Python 3.13 environment, installs the `npm` dependencies, downloads Ghidra to `.tools/`, and runs the environment checks. A successful setup ends with `Environment checks passed.`
 
-The environment is self-modifying. If an analysis needs a tool that isn't installed, the agent can add it:
+4. Configure your current shell:
 
-- **Python packages:** `uv add <pkg>` (the active `.venv` updates automatically)
-- **Node.js packages:** `npm install <pkg>`
-- **Ubuntu packages:** add the package to `scripts/setup-wsl.sh`, then rerun the script
-- **Standalone tools:** add a versioned installer under `scripts/` and install into `.tools/`
+   ```sh
+   source scripts/env.sh
+   ```
 
-If you use `direnv`, the included `.envrc` sources `scripts/env.sh`; `direnv` itself is optional.
+If you need the password-cracking, field-programmable gate array (FPGA), Arm, Wine, and `scrcpy` packages, run `bash scripts/setup-wsl.sh --full` instead.
 
-## Output directories
+## Start a work session
 
-- **`tmp/`** -- Intermediate work products (gitignored)
-- **`artifacts/`** -- Final deliverables like reports and analysis notes (gitignored)
+1. Go to the repository:
 
-## WSL notes
+   ```sh
+   cd ~/re-wsl
+   ```
 
-- Keep the checkout on WSL's native Linux filesystem. `/mnt/c` is substantially slower for virtual environments, `node_modules`, Ghidra, and large decompilations.
-- WSLg is sufficient for the Ghidra GUI on current Windows installations. `analyzeHeadless` works without a GUI.
-- USB access from WSL requires attaching the device to WSL (commonly with `usbipd-win`) before Linux tools can see it.
-- Packet capture and raw USB/I2C access may still require `sudo` or device-specific udev/group permissions.
+2. Configure your shell:
+
+   ```sh
+   source scripts/env.sh
+   ```
+
+If you use `direnv`, the included `.envrc` configures the shell when you enter the repository.
+
+Put files for analysis in `inputs/`. The agent loads the matching guidance for Windows binaries, Android packages, or web protocols.
+
+## Use the discipline guides
+
+The following guides describe the tools and workflows for each type of analysis:
+
+| Guide | Use for | Example files |
+|---|---|---|
+| Windows reverse engineering | Portable Executable (PE) binaries, .NET assemblies, and drivers | `.exe`, `.dll`, `.sys` |
+| Android reverse engineering | Android packages, Dalvik Executable (DEX) bytecode, and smali | `.apk`, `.xapk` |
+| Web reverse engineering | Hypertext Transfer Protocol (HTTP) captures, application programming interfaces (APIs), WebSockets, and Protocol Buffers | `.har`, `.proto` |
+
+Codex loads the guides from `.agents/skills/`. Claude Code loads the equivalent guides from `.claude/skills/`.
+
+## Add tools
+
+To keep a tool in the environment, update the matching dependency source:
+
+- Add a Python package with `uv add PACKAGE`. Commit `pyproject.toml` and `uv.lock`.
+- Add a Node.js package with `npm install PACKAGE`. Commit `package.json` and `package-lock.json`.
+- Add an Ubuntu package to `scripts/setup-wsl.sh`.
+- Add a versioned installer for a standalone tool under `scripts/`, and install the tool under `.tools/`.
+
+After you change the toolset, run `bash scripts/doctor.sh` to verify the environment.
+
+## Store analysis output
+
+Store generated files in the following directories:
+
+- `tmp/`: Intermediate files, extracted content, decompiled sources, and Ghidra projects.
+- `artifacts/`: Reports, rules, hooks, patches, and other requested deliverables.
+
+Both directories are excluded from Git.
+
+## Understand the WSL limitations
+
+- WSLg can run the Ghidra graphical interface. `analyzeHeadless` does not require a graphical interface.
+- Before Linux tools can access a Universal Serial Bus (USB) device, attach the device to WSL. You can use `usbipd-win` for this task.
+- To capture packets or access some USB and Inter-Integrated Circuit (I2C) devices, use `sudo` or configure the required device permissions.
+
+## Project origin
+
+This project is a WSL-focused fork of [Chaz Schlarp's `schlarpc/re-shell`](https://github.com/schlarpc/re-shell/). The original project provides the reverse-engineering environment and discipline documentation. This fork replaces the Nix setup with Ubuntu packages, `uv`, `npm`, and WSL-specific scripts.
