@@ -4,7 +4,7 @@
 > This project is a WSL-focused fork of [schlarpc/re-shell](https://github.com/schlarpc/re-shell/), created by Chaz Schlarp. The original project provides the reverse-engineering environment and discipline documentation; this fork replaces its Nix-based setup with native Ubuntu packages, `uv`, npm, and WSL-specific tooling.
 > I just don't use nix and don't want to learn :)
 
-A native WSL2 reverse-engineering environment designed for use with [Claude Code](https://docs.anthropic.com/en/docs/claude-code). It uses Ubuntu packages for system tools, `uv` for a locked Python 3.13 environment, npm for Node.js dependencies, and an official Ghidra release installed inside the project. Nix is not required.
+A native WSL2 reverse-engineering environment designed for use with [OpenAI Codex](https://developers.openai.com/codex/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code). It uses Ubuntu packages for system tools, `uv` for a locked Python 3.13 environment, npm for Node.js dependencies, and an official Ghidra release installed inside the project. Nix is not required.
 
 ## WSL quick start
 
@@ -25,11 +25,23 @@ To launch a fresh configured shell instead of sourcing the environment:
 bash scripts/enter.sh
 ```
 
-Then drop a sample into `inputs/`, start Claude Code, and ask it to analyze the file.
+Then drop a sample into `inputs/`, start Codex or Claude Code from the repository root, and ask it to analyze the file.
+
+### Codex on WSL
+
+Install and run Codex inside WSL so commands execute against the native Linux checkout:
+
+```sh
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+cd ~/re-wsl
+codex
+```
+
+Codex automatically reads `AGENTS.md` and discovers the repository skills under `.agents/skills/`. Claude Code uses the equivalent `CLAUDE.md` and `.claude/skills/` files. Both agents receive the same environment, output, safety, and discipline-specific guidance.
 
 ## How it works
 
-The environment combines Ghidra, radare2, Frida, mitmproxy, YARA, Android tools, network tools, Python libraries, and more. Claude Code is configured via `CLAUDE.md` with discipline-specific **skills** that auto-activate based on file type and context:
+The environment combines Ghidra, radare2, Frida, mitmproxy, YARA, Android tools, network tools, Python libraries, and more. Codex and Claude Code are configured with discipline-specific **skills** that activate based on file type and context:
 
 | Skill | Activates on | Example files |
 |-------|-------------|---------------|
@@ -37,11 +49,11 @@ The environment combines Ghidra, radare2, Frida, mitmproxy, YARA, Android tools,
 | Android RE | Android packages, DEX bytecode | `.apk`, `.xapk` |
 | Web RE | HTTP captures, API traffic, protobufs | `.har`, `.proto` |
 
-When Claude detects relevant context, the matching skill loads specialized tool documentation and workflows -- no manual configuration needed.
+When an agent detects relevant context, the matching skill loads specialized tool documentation and workflows -- no manual configuration needed.
 
 ## Adding tools
 
-The environment is self-modifying. If an analysis needs a tool that isn't installed, Claude can add it:
+The environment is self-modifying. If an analysis needs a tool that isn't installed, the agent can add it:
 
 - **Python packages:** `uv add <pkg>` (the active `.venv` updates automatically)
 - **Node.js packages:** `npm install <pkg>`

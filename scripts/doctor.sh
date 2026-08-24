@@ -17,6 +17,15 @@ check_command() {
   fi
 }
 
+check_optional_command() {
+  local name="$1"
+  if command -v "$name" >/dev/null 2>&1 && "$name" --version >/dev/null 2>&1; then
+    printf '[ok]   %-18s %s (optional agent CLI)\n' "$name" "$(command -v "$name")"
+  else
+    printf '[info] %-18s optional; install inside WSL if CLI use is desired\n' "$name"
+  fi
+}
+
 if grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
   printf '[ok]   WSL                %s\n' "$(uname -r)"
 else
@@ -27,6 +36,8 @@ fi
 for command_name in uv python node npm java r2 binwalk yara tshark nmap adb apktool ghidraRun analyzeHeadless; do
   check_command "$command_name"
 done
+
+check_optional_command codex
 
 if uv run --frozen python -c 'import capstone, cryptography, frida, numpy, pyghidra, scipy, usb.core, yara' >/dev/null 2>&1; then
   printf '[ok]   Python imports     core RE libraries\n'

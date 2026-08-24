@@ -9,7 +9,7 @@
 # Optional local wordlists
 /wordlists
 
-# Claude's temp directory
+# Agent scratch directory
 /tmp
 
 # Analysis artifacts

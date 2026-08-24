@@ -2,6 +2,8 @@
 
 Multi-discipline native WSL2 environment for reverse engineering. Run `bash scripts/setup-wsl.sh` once, then enter with `source scripts/env.sh` or `bash scripts/enter.sh`.
 
+This is the shared detailed tool catalog for both Claude Code and OpenAI Codex. Codex receives its repository instructions from `AGENTS.md` and discovers equivalent skills under `.agents/skills/`; keep the two agent integrations synchronized.
+
 ## Skill System
 
 This environment is organized into a **general-purpose core** (this file) and **discipline-specific skills** that auto-activate based on context. Skills provide specialized tool documentation, workflows, and notes for their domain.
@@ -10,13 +12,13 @@ This environment is organized into a **general-purpose core** (this file) and **
 
 | Skill | Path | Activates On |
 |-------|------|-------------|
-| Android RE | `.claude/skills/android/SKILL.md` | APK, DEX, smali, ADB, Android app analysis |
-| Windows RE | `.claude/skills/windows/SKILL.md` | PE, .exe, .dll, .sys, .NET, Windows binary analysis |
-| Web RE | `.claude/skills/web/SKILL.md` | Protobuf, gRPC, HAR, HTTP API, WebSocket, TLS fingerprint, web scraping |
+| Android RE | `.claude/skills/android/SKILL.md`, `.agents/skills/android/SKILL.md` | APK, DEX, smali, ADB, Android app analysis |
+| Windows RE | `.claude/skills/windows/SKILL.md`, `.agents/skills/windows/SKILL.md` | PE, .exe, .dll, .sys, .NET, Windows binary analysis |
+| Web RE | `.claude/skills/web/SKILL.md`, `.agents/skills/web/SKILL.md` | Protobuf, gRPC, HAR, HTTP API, WebSocket, TLS fingerprint, web scraping |
 
 ### Adding a New Discipline
 
-1. Create `.claude/skills/<discipline>/SKILL.md` with front matter (`name`, `user-invocable: false`, `description` with trigger keywords).
+1. Create matching `.claude/skills/<discipline>/SKILL.md` and `.agents/skills/<discipline>/SKILL.md` files with front matter (`name` and a trigger-oriented `description`; Claude may also use `user-invocable: false`).
 2. Add discipline-specific Ubuntu packages to `scripts/setup-wsl.sh` or a standalone installer under `scripts/`.
 3. Add discipline-specific Python/Node dependencies to `pyproject.toml`/`package.json`.
 4. Document the skill in the table above.
