@@ -18,6 +18,8 @@ Keep the repository under your Linux home directory, such as `~/re-wsl`. Paths u
 
 ## Set up the environment
 
+If Ghidra is installed outside the standard locations, set `GHIDRA_INSTALL_DIR` or `GHIDRA_PATH` before you run the setup script. Either variable can point to the Ghidra installation directory or its `ghidraRun` executable. The setup script also checks `PATH`, `.tools/ghidra/current`, `/opt/ghidra`, and `/usr/share/ghidra`.
+
 1. Clone the repository:
 
    ```sh
@@ -36,7 +38,7 @@ Keep the repository under your Linux home directory, such as `~/re-wsl`. Paths u
    bash scripts/setup-wsl.sh
    ```
 
-   The setup script installs the Ubuntu packages, creates the locked Python 3.13 environment, installs the `npm` dependencies, downloads Ghidra to `.tools/`, and runs the environment checks. A successful setup ends with `Environment checks passed.`
+   The setup script installs the Ubuntu packages, creates the locked Python 3.13 environment, installs the `npm` dependencies, and runs the environment checks. If it finds Ghidra, it uses that installation. Otherwise, it downloads Ghidra to `.tools/`. A successful setup ends with `Environment checks passed.`
 
 4. Configure your current shell:
 

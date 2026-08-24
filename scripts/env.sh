@@ -10,6 +10,9 @@ fi
 RE_SHELL_ROOT="$(cd "$(dirname "$_re_shell_script")/.." && pwd -P)"
 export RE_SHELL_ROOT
 
+# shellcheck source=find-ghidra.sh
+source "$RE_SHELL_ROOT/scripts/find-ghidra.sh"
+
 _re_shell_prepend_path() {
   local entry="$1"
   [[ -d "$entry" ]] || return 0
@@ -27,17 +30,19 @@ if [[ -d "$RE_SHELL_ROOT/.venv" ]]; then
   export VIRTUAL_ENV="$RE_SHELL_ROOT/.venv"
 fi
 
-if [[ -z "${GHIDRA_INSTALL_DIR:-}" ]]; then
-  for _re_shell_ghidra in \
-    "$RE_SHELL_ROOT/.tools/ghidra/current" \
-    /opt/ghidra \
-    /usr/share/ghidra; do
-    if [[ -x "$_re_shell_ghidra/ghidraRun" ]]; then
-      GHIDRA_INSTALL_DIR="$_re_shell_ghidra"
-      export GHIDRA_INSTALL_DIR
-      break
-    fi
-  done
+if [[ -n "${GHIDRA_INSTALL_DIR:-}" ]] && \
+   ! _re_shell_resolve_ghidra_install_dir "$GHIDRA_INSTALL_DIR" >/dev/null; then
+  printf 'Warning: ignoring invalid GHIDRA_INSTALL_DIR: %s\n' "$GHIDRA_INSTALL_DIR" >&2
+elif [[ -z "${GHIDRA_INSTALL_DIR:-}" && -n "${GHIDRA_PATH:-}" ]] && \
+     ! _re_shell_resolve_ghidra_install_dir "$GHIDRA_PATH" >/dev/null; then
+  printf 'Warning: ignoring invalid GHIDRA_PATH: %s\n' "$GHIDRA_PATH" >&2
+fi
+
+if _re_shell_ghidra="$(_re_shell_find_ghidra_install_dir "$RE_SHELL_ROOT")"; then
+  GHIDRA_INSTALL_DIR="$_re_shell_ghidra"
+  export GHIDRA_INSTALL_DIR
+else
+  unset GHIDRA_INSTALL_DIR
 fi
 
 if [[ -n "${GHIDRA_INSTALL_DIR:-}" ]]; then
@@ -73,3 +78,4 @@ export PATH
 
 unset _re_shell_script _re_shell_ghidra _re_shell_java
 unset -f _re_shell_prepend_path
+unset -f _re_shell_resolve_ghidra_install_dir _re_shell_find_ghidra_install_dir
