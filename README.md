@@ -1,6 +1,6 @@
 # re-shell
 
-Set up a reverse-engineering environment on Ubuntu under Windows Subsystem for Linux 2 (WSL2). The environment includes Ghidra, radare2, Frida, mitmproxy, YARA, Android tools, network tools, and Python libraries. It uses `uv` and `npm` instead of Nix. Based off of [Everything I own, owned](https://schlarp.com/posts/everything-i-own-owned/) and the [accompanying repo](https://github.com/schlarpc/re-shell/tree/main).
+Set up a reverse-engineering environment on Ubuntu under Windows Subsystem for Linux 2 (WSL2). The environment includes Ghidra, radare2, Frida, mitmproxy, YARA, Android tools, network tools, and Python libraries. It uses `uv` and `npm` instead of Nix. Based off of [Everything I own, owned](https://schlarp.com/posts/everything-i-own-owned/) and the [accompanying repo](https://github.com/schlarpc/re-shell/tree/main). I just don't use nix and don't want to learn :)
 
 The environment works best with the OpenAI Codex command-line interface (CLI). Claude Code is also supported.
 
