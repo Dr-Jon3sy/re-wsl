@@ -1,10 +1,12 @@
 # Build outputs / cache
 /.direnv
+/.venv
+/.tools
 /node_modules
 /result
 /.ruff_cache
 
-# Wordlists symlink (created by devShell shellHook -> Nix store)
+# Optional local wordlists
 /wordlists
 
 # Claude's temp directory

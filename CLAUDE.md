@@ -1,6 +1,6 @@
 # Reverse Engineering Environment
 
-Multi-discipline Nix flake-based development shell for reverse engineering. Enter the environment with `nix develop` or via direnv.
+Multi-discipline native WSL2 environment for reverse engineering. Run `bash scripts/setup-wsl.sh` once, then enter with `source scripts/env.sh` or `bash scripts/enter.sh`.
 
 ## Skill System
 
@@ -17,10 +17,10 @@ This environment is organized into a **general-purpose core** (this file) and **
 ### Adding a New Discipline
 
 1. Create `.claude/skills/<discipline>/SKILL.md` with front matter (`name`, `user-invocable: false`, `description` with trigger keywords).
-2. Add discipline-specific tools to `flake.nix` under a `# --- <Discipline>:` comment section.
+2. Add discipline-specific Ubuntu packages to `scripts/setup-wsl.sh` or a standalone installer under `scripts/`.
 3. Add discipline-specific Python/Node dependencies to `pyproject.toml`/`package.json`.
 4. Document the skill in the table above.
-5. Tools shared across disciplines stay in the general sections of `flake.nix` and this file.
+5. Tools shared across disciplines stay in the base package list in `scripts/setup-wsl.sh` and this file.
 
 ## Output Directory Convention
 
@@ -32,7 +32,7 @@ All reverse engineering work products must go in one of two locations:
 When running tools, always direct output into `tmp/` rather than the repo root. Examples:
 
 ```sh
-ghidra  # save project to tmp/ghidra_<sample>/
+ghidraRun  # save project to tmp/ghidra_<sample>/
 r2 -A sample.bin  # any output files go to tmp/
 binwalk -e firmware.bin -C tmp/binwalk_firmware/
 ```
@@ -41,7 +41,7 @@ Never leave tool output in the repo root or in ad-hoc directories outside these 
 
 ## Environment Structure
 
-The dev shell is defined in `flake.nix` and organized into tool categories. Python dependencies are declared in `pyproject.toml`, locked by `uv.lock`, and built into a Nix virtualenv via [uv2nix](https://github.com/pyproject-nix/uv2nix). Node.js dependencies are declared in `package.json`, locked by `package-lock.json`, and built via `importNpmLock`; bin scripts from npm packages are automatically on PATH. Ghidra's JDK is configured via `GHIDRA_JAVA_HOME`.
+`scripts/setup-wsl.sh` installs Ubuntu packages, syncs the Python 3.13 `.venv` from `pyproject.toml` and `uv.lock`, installs Node.js dependencies from `package-lock.json`, and installs the latest official Ghidra release under `.tools/`. `scripts/env.sh` configures PATH, Ghidra's JDK, libusb, and the repo-local Java temporary directory. Nix is not used.
 
 ## Installed Tools (General-Purpose)
 
@@ -51,7 +51,7 @@ Discipline-specific tools are documented in their respective skill files. The to
 
 | Tool | Command | Description |
 |------|---------|-------------|
-| Ghidra | `ghidra` | NSA's software reverse engineering suite with decompiler; supports x86, x64, ARM, ARM64, MIPS, and more |
+| Ghidra | `ghidraRun` | NSA's software reverse engineering suite with decompiler; supports x86, x64, ARM, ARM64, MIPS, and more |
 | radare2 | `r2 binary` | CLI-first RE framework for disassembly, analysis, patching, and debugging |
 | rizin | `rizin binary` | Modern radare2 fork with improved APIs and Ghidra decompiler integration via rz-ghidra |
 | binwalk | `binwalk firmware.bin` | Scan and extract embedded files, compressed streams, and filesystems from binaries |
@@ -79,7 +79,7 @@ Discipline-specific tools are documented in their respective skill files. The to
 | i2c-tools | `i2ctransfer -y N w5@0x37 ...` | Raw I2C frames; needed for 16-bit/vendor DDC/CI opcodes ddcutil won't emit |
 
 Both need the `i2c-dev` kernel module loaded (`sudo modprobe i2c-dev`) and RW access to
-`/dev/i2c-*`. On NixOS, `hardware.i2c.enable = true;` loads it and grants the `i2c` group access.
+`/dev/i2c-*`. WSL must also have the relevant hardware attached and exposed to Linux.
 
 ### USB
 
@@ -98,8 +98,8 @@ Reading and writing hidraw needs permission on the node: run as root, or add a u
 Plain `open()` plus `select()` on the hidraw node is enough for feature-free report I/O; no
 extra Python binding is needed.
 
-Raw USB from Python uses `pyusb` over the libusb-1.0 backend. `ctypes.util.find_library`
-finds nothing on NixOS, so the dev shell exports `LIBUSB1_SO`; pass it explicitly:
+Raw USB from Python uses `pyusb` over the libusb-1.0 backend. The environment discovers
+Ubuntu's shared library and exports `LIBUSB1_SO`; pass it explicitly when needed:
 
 ```python
 import os, usb.core, usb.backend.libusb1 as lb
@@ -113,7 +113,7 @@ switches USB modes, so match on all of the identities it can present.
 
 ### Password / Hash Cracking
 
-Wordlists and rules are exposed as a stable dir-of-symlinks at `wordlists/` in the repo root (gitignored, points into the Nix store) so no `/nix/store` spelunking is needed. Contents: `wordlists/rockyou.txt`, `wordlists/seclists/` (full SecLists tree), `wordlists/best64.rule`, `wordlists/hashcat-rules/`, `wordlists/john-rules/`, `wordlists/john-password.lst`. To add more, edit the `wordlists` linkFarm in `flake.nix`.
+Put local wordlists and rules under the gitignored `wordlists/` directory. The larger cracking tools are installed by `bash scripts/setup-wsl.sh --full`; wordlist data is intentionally not downloaded automatically.
 
 | Tool | Command | Description |
 |------|---------|-------------|
@@ -170,8 +170,7 @@ takes under a second, proving the right one may not finish.
 Find a network device before you scan for it. Most consumer hardware advertises
 itself over mDNS, so `avahi-browse -art` names the device and its port in one
 step. Use `nmap` when the device does not advertise, or when the service name is
-unknown. `avahi-browse` needs the avahi daemon on the host
-(`services.avahi.enable = true;` on NixOS).
+unknown. `avahi-browse` needs an mDNS daemon; under WSL, start `avahi-daemon` if systemd is enabled and multicast reaches the WSL network.
 
 ### General Utilities
 
@@ -185,12 +184,12 @@ unknown. `avahi-browse` needs the avahi daemon on the host
 | exiftool | `exiftool file` | Read/write embedded metadata (images, documents, firmware) |
 | innoextract | `innoextract -e -d out setup.exe` | Extract Inno Setup installers (common packaging for vendor firmware update tools) |
 | asar | `asar extract app.asar tmp/app/` | Unpack Electron `app.asar` archives (`asar list` to inspect first) |
-| uv | `uv add <pkg>` | Python package manager; add dependencies to pyproject.toml and uv.lock, then `direnv reload` to rebuild |
-| npm | `npm install <pkg>` | Node.js package manager; add dependencies to package.json and package-lock.json, then `direnv reload` to rebuild |
+| uv | `uv add <pkg>` | Python package manager; updates `pyproject.toml`, `uv.lock`, and `.venv` |
+| npm | `npm install <pkg>` | Node.js package manager; updates `package.json`, `package-lock.json`, and `node_modules` |
 
 ### Python Scripting Environment
 
-Python dependencies are managed via `pyproject.toml` and `uv.lock`, built into a Nix virtualenv by uv2nix. The following general-purpose libraries are pre-installed:
+Python dependencies are managed via `pyproject.toml` and `uv.lock` and installed by uv into `.venv`. The following general-purpose libraries are pre-installed:
 
 | Library | Import | Description |
 |---------|--------|-------------|
@@ -209,13 +208,13 @@ Use `capstone` for a quick look at a small number of instructions, for example t
 identify a patch site or to read a function prologue. Ghidra gives better results
 on a full image, but a large blob can need more than an hour to analyze.
 
-Discipline-specific Python libraries are listed in their respective skill files. To add a Python package permanently, run `uv add <package>` then `direnv reload`. See [Augmenting the Environment](#augmenting-the-environment).
+Discipline-specific Python libraries are listed in their respective skill files. To add a Python package permanently, run `uv add <package>`. See [Augmenting the Environment](#augmenting-the-environment).
 
 ### Node.js Scripting Environment
 
-Node.js dependencies are managed via `package.json` and `package-lock.json`, built into a Nix-managed `node_modules` by `importNpmLock`. Bin scripts from installed packages are automatically available on PATH via `linkNodeModulesHook`.
+Node.js dependencies are managed via `package.json` and `package-lock.json` and installed into `node_modules` by npm. `scripts/env.sh` puts their bin scripts on PATH.
 
-Discipline-specific Node.js tools are listed in their respective skill files. To add a Node.js package permanently, run `npm install <package>` then `direnv reload`. See [Augmenting the Environment](#augmenting-the-environment). Note that npm packages with native install scripts that download binaries (e.g., the `frida` npm package) will fail in the Nix sandbox -- use nixpkgs equivalents for those.
+Discipline-specific Node.js tools are listed in their respective skill files. To add a Node.js package permanently, run `npm install <package>`. See [Augmenting the Environment](#augmenting-the-environment).
 
 ## Common Workflows
 
@@ -223,10 +222,10 @@ Discipline-specific Node.js tools are listed in their respective skill files. To
 
 ```sh
 # GUI (requires display server on headless/WSL)
-ghidra  # import binary, save project to tmp/
+ghidraRun  # import binary, save project to tmp/
 
 # Headless analysis
-ghidra-analyzeHeadless tmp/ghidra_project ProjectName -import binary -postScript script.java
+analyzeHeadless tmp/ghidra_project ProjectName -import binary -postScript script.java
 ```
 
 ### Scripted Ghidra analysis with pyghidra
@@ -280,14 +279,14 @@ tshark -i any -w tmp/capture.pcap
 
 ### Adding Python packages with uv
 
-Python dependencies are managed through `pyproject.toml` and built natively by Nix via uv2nix. To add a package:
+Python dependencies are managed through `pyproject.toml` and installed into `.venv` by uv. To add a package:
 
 ```sh
 # Add a dependency (updates pyproject.toml and uv.lock)
 uv add protobuf
 
-# Rebuild the Nix environment with the new dependency
-direnv reload
+# uv updates the lockfile and active .venv in the same command
+uv sync --frozen --link-mode copy
 ```
 
 For temporary/one-off usage without modifying the project, use `uv run`:
@@ -302,14 +301,14 @@ uv run --with pycryptodome ipython
 
 ### Adding Node.js packages with npm
 
-Node.js dependencies are managed through `package.json` and built natively by Nix via `importNpmLock`. To add a package:
+Node.js dependencies are managed through `package.json` and installed into `node_modules` by npm. To add a package:
 
 ```sh
 # Add a dependency (updates package.json and package-lock.json)
 npm install some-tool
 
-# Rebuild the Nix environment with the new dependency
-direnv reload
+# Reproduce the lockfile exactly on another machine
+npm ci
 ```
 
 Bin scripts from installed packages are automatically available on PATH (e.g., installing a package that provides a CLI tool makes it directly runnable).
@@ -335,28 +334,28 @@ When a task calls for a tool or library not currently in the dev shell, you have
 **For Python libraries**, use uv to add them to `pyproject.toml`:
 
 1. Run `uv add <package>` (updates `pyproject.toml` and `uv.lock`).
-2. Run `direnv reload` to rebuild the Nix virtualenv with the new dependency.
-3. If the package needs native libraries or build fixups, add overrides to the `dependencyFixups` section in `flake.nix`. See comments there for examples.
+2. Verify with `uv sync --frozen --link-mode copy` and `bash scripts/doctor.sh`.
+3. If the package needs native libraries, add the corresponding Ubuntu package to `scripts/setup-wsl.sh`.
 4. **Update the appropriate skill file or `CLAUDE.md`** to document the new library.
 
 **For Node.js packages**, use npm to add them to `package.json`:
 
 1. Run `npm install <package>` (updates `package.json` and `package-lock.json`).
-2. Run `direnv reload` to rebuild the Nix node_modules with the new dependency.
+2. Run `npm ci` to verify the lockfile can reproduce `node_modules`.
 3. **Update the appropriate skill file or `CLAUDE.md`** to document the new tool.
 
-**For non-Python/non-Node tools**, add them to `flake.nix`:
+**For non-Python/non-Node tools**, use an Ubuntu package when available:
 
-1. **Search nixpkgs** for the package using the `/nix-package-search` skill (e.g., `/nix-package-search protobuf`).
-2. **Edit `flake.nix`** to add the package to the `packages` list under the appropriate category section.
-3. **Reload the environment** by running `direnv reload` (or exiting and re-entering `nix develop`).
-4. **Update the appropriate skill file or `CLAUDE.md`** to document the new tool so documentation stays in sync with the flake.
+1. Check `apt-cache policy <package>` in WSL.
+2. Add the package to the base or full list in `scripts/setup-wsl.sh`.
+3. For tools absent from Ubuntu, add a versioned installer under `scripts/` that installs into the gitignored `.tools/` directory and verifies a published checksum when available.
+4. Rerun setup and update the appropriate skill file or `CLAUDE.md`.
 
-You are encouraged to self-modify `flake.nix`, `pyproject.toml`, `package.json`, skill files, and this file whenever the analysis requires a tool that should be part of the standard environment. Keep the existing organizational structure (category comments, table format) when adding entries.
+You are encouraged to update `scripts/setup-wsl.sh`, `pyproject.toml`, `package.json`, skill files, and this file whenever the analysis requires a tool that should be part of the standard environment.
 
-**Important:** When documenting a new tool, verify that the actual binary name on PATH matches what you write in the Command column. Nix package names often differ from binary names (e.g., `pkgs.aapt` provides `aapt2`, `pkgs.avalonia-ilspy` provides `ILSpy`, `pkgs.ghidra` wraps binaries with a `ghidra-` prefix). Run `which <command>` or check the package's `bin/` directory after `direnv reload` to confirm before documenting.
+**Important:** When documenting a new tool, verify the actual binary name with `command -v <command>`. Ubuntu package names and installed binaries often differ.
 
 ## Notes
 
-- Ghidra requires a display server for its GUI. On headless/WSL systems, use an X server (e.g., VcXsrv) or Ghidra's headless analyzer: `ghidra-analyzeHeadless`.
+- Ghidra's GUI uses WSLg when available. On headless WSL systems, use `analyzeHeadless`.
 - Frida requires a matching `frida-server` binary running on the target (device or host).
