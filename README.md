@@ -6,38 +6,29 @@
 
 A native WSL2 reverse-engineering environment designed for use with [OpenAI Codex](https://developers.openai.com/codex/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code). It uses Ubuntu packages for system tools, `uv` for a locked Python 3.13 environment, npm for Node.js dependencies, and an official Ghidra release installed inside the project. Nix is not required.
 
-## WSL quick start
+## Quick start
 
-From an Ubuntu WSL2 shell:
+Prerequisites: Ubuntu on WSL2, `uv`, and [Codex](https://learn.chatgpt.com/docs/windows/wsl) or Claude Code installed inside WSL.
+
+Run once:
 
 ```sh
+git clone git@github.com:Dr-Jon3sy/re-wsl.git ~/re-wsl
 cd ~/re-wsl
 bash scripts/setup-wsl.sh
 source scripts/env.sh
-bash scripts/doctor.sh
-```
-
-The setup is idempotent. It installs the core toolchain and downloads Ghidra into the gitignored `.tools/` directory. Use `bash scripts/setup-wsl.sh --full` to add the larger optional Ubuntu packages for password cracking, FPGA/ARM work, Wine, and `scrcpy`.
-
-To launch a fresh configured shell instead of sourcing the environment:
-
-```sh
-bash scripts/enter.sh
-```
-
-Then drop a sample into `inputs/`, start Codex or Claude Code from the repository root, and ask it to analyze the file.
-
-### Codex on WSL
-
-Install and run Codex inside WSL so commands execute against the native Linux checkout:
-
-```sh
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
-cd ~/re-wsl
 codex
 ```
 
-Codex automatically reads `AGENTS.md` and discovers the repository skills under `.agents/skills/`. Claude Code uses the equivalent `CLAUDE.md` and `.claude/skills/` files. Both agents receive the same environment, output, safety, and discipline-specific guidance.
+Next time:
+
+```sh
+cd ~/re-wsl && source scripts/env.sh && codex
+```
+
+Use `claude` instead of `codex` if preferred. Put samples in `inputs/`; use `bash scripts/setup-wsl.sh --full` only when you need the larger optional toolset.
+
+Codex reads `AGENTS.md` and `.agents/skills/`. Claude Code reads the equivalent `CLAUDE.md` and `.claude/skills/` files.
 
 ## How it works
 
