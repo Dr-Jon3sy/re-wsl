@@ -2,6 +2,7 @@
 
 > [!NOTE]
 > This project is a WSL-focused fork of [schlarpc/re-shell](https://github.com/schlarpc/re-shell/), created by Chaz Schlarp. The original project provides the reverse-engineering environment and discipline documentation; this fork replaces its Nix-based setup with native Ubuntu packages, `uv`, npm, and WSL-specific tooling.
+> I just don't use nix and don't want to learn :)
 
 A native WSL2 reverse-engineering environment designed for use with [Claude Code](https://docs.anthropic.com/en/docs/claude-code). It uses Ubuntu packages for system tools, `uv` for a locked Python 3.13 environment, npm for Node.js dependencies, and an official Ghidra release installed inside the project. Nix is not required.
 
