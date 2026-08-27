@@ -125,7 +125,7 @@ fi
 
 cd "$repo_root"
 printf '\nSyncing Python %s environment...\n' "$(cat .python-version)"
-uv sync --frozen --link-mode copy
+uv sync --frozen
 
 if command -v npm >/dev/null 2>&1; then
   printf '\nInstalling locked Node.js dependencies...\n'

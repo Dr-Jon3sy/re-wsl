@@ -50,12 +50,16 @@ Use the matching skill whenever the input or task falls within its description.
 For configuration changes, run the relevant checks:
 
 ```sh
-bash -n scripts/*.sh
+for script in scripts/*.sh; do
+  bash -n "$script"
+done
 bash scripts/check-skill-sync.sh
 uv lock --check
-npm audit
+npm ci --dry-run --ignore-scripts
 bash scripts/doctor.sh
 ```
+
+Dependency advisories are checked separately by the scheduled GitHub Actions audit workflow.
 
 If setup behavior changed, also run the narrowest safe idempotency check that covers it. Run `bash scripts/doctor.sh --full` when the optional packages are installed. Do not claim a tool works merely because it is listed; verify its command or import when practical.
 

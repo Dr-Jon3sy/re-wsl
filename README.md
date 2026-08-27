@@ -116,7 +116,8 @@ These directories are excluded from Git. Common sample extensions are also ignor
 
 - WSLg can run the Ghidra graphical interface. `analyzeHeadless` does not require a graphical interface.
 - Before Linux tools can access a Universal Serial Bus (USB) device, attach the device to WSL. You can use `usbipd-win` for this task.
-- To capture packets or access some USB and Inter-Integrated Circuit (I2C) devices, use `sudo` or configure the required device permissions.
+- The stock WSL2 kernel does not enable `CONFIG_I2C_CHARDEV` or `CONFIG_UHID`. `edid-decode` works on saved Extended Display Identification Data (EDID), but `i2cdetect`, `i2ctransfer`, and `ddcutil` need a custom WSL2 kernel with I2C character-device support plus a compatible device and driver. If you install `hid-replay` separately, it needs a custom kernel with `CONFIG_UHID`. Select a custom kernel with the `kernel=` setting in `.wslconfig`.
+- To capture packets or access attached USB devices, use `sudo` or configure the required device permissions.
 
 ## Add tools
 

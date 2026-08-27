@@ -133,7 +133,7 @@ if uv run --frozen python -c \
     'from importlib.metadata import version; print(version("pyghidra"))')"
   printf '[ok]   %-20s core RE libraries (PyGhidra %s)\n' 'Python imports' "$pyghidra_version"
 else
-  printf '[miss] %-20s run: uv sync --frozen --link-mode copy\n' 'Python imports'
+  printf '[miss] %-20s run: uv sync --frozen\n' 'Python imports'
   failures=$((failures + 1))
 fi
 

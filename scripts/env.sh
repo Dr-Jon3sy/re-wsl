@@ -81,7 +81,6 @@ case "${_JAVA_OPTIONS:-}" in
   *) export _JAVA_OPTIONS="-Djava.io.tmpdir=$RE_SHELL_ROOT/tmp/jtmp${_JAVA_OPTIONS:+ $_JAVA_OPTIONS}" ;;
 esac
 
-export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
 export PATH
 
 unset _re_shell_script _re_shell_ghidra _re_shell_java _re_shell_libusb

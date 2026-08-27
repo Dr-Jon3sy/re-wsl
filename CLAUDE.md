@@ -39,6 +39,8 @@ The base setup installs the following command-line tools.
 | Data and archives | `jq`, `sqlite3`, `openssl`, `7z`, `unzip` |
 | Hardware support | `lsusb`, `i2cdetect`, `ddcutil`, `edid-decode`, `v4l2-ctl` |
 
+The hardware commands are installed, but stock WSL2 does not expose every required kernel interface. See "Understand the WSL limitations" in `README.md` before attempting live I2C or HID access. `edid-decode` can inspect saved EDID files without hardware access.
+
 The `--full` setup adds `hashcat`, `john`, `yosys`, `arm-none-eabi-gcc`, and `scrcpy`. On amd64 WSL it also installs `wine` and `winetricks` with i386 support. GPU acceleration for Hashcat depends on compatible Windows drivers and WSL GPU passthrough.
 
 Ubuntu packages use distribution versions rather than the versions from the upstream Nix lock.
