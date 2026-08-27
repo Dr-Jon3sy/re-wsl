@@ -1,363 +1,150 @@
-# Reverse Engineering Environment
+# re-wsl reverse-engineering environment
 
-Multi-discipline native WSL2 environment for reverse engineering. Run `bash scripts/setup-wsl.sh` once, then enter with `source scripts/env.sh` or `bash scripts/enter.sh`.
+These instructions describe the WSL toolset used by both Codex and Claude Code. This repository is a WSL and `uv` port of [`schlarpc/re-shell`](https://github.com/schlarpc/re-shell/); it does not use Nix.
 
-This is the shared detailed tool catalog for both Claude Code and OpenAI Codex. Codex receives its repository instructions from `AGENTS.md` and discovers equivalent skills under `.agents/skills/`; keep the two agent integrations synchronized.
+## Enter the environment
 
-## Skill System
-
-This environment is organized into a **general-purpose core** (this file) and **discipline-specific skills** that auto-activate based on context. Skills provide specialized tool documentation, workflows, and notes for their domain.
-
-### Available Disciplines
-
-| Skill | Path | Activates On |
-|-------|------|-------------|
-| Android RE | `.claude/skills/android/SKILL.md`, `.agents/skills/android/SKILL.md` | APK, DEX, smali, ADB, Android app analysis |
-| Windows RE | `.claude/skills/windows/SKILL.md`, `.agents/skills/windows/SKILL.md` | PE, .exe, .dll, .sys, .NET, Windows binary analysis |
-| Web RE | `.claude/skills/web/SKILL.md`, `.agents/skills/web/SKILL.md` | Protobuf, gRPC, HAR, HTTP API, WebSocket, TLS fingerprint, web scraping |
-
-### Adding a New Discipline
-
-1. Create matching `.claude/skills/<discipline>/SKILL.md` and `.agents/skills/<discipline>/SKILL.md` files with front matter (`name` and a trigger-oriented `description`; Claude may also use `user-invocable: false`).
-2. Add discipline-specific Ubuntu packages to `scripts/setup-wsl.sh` or a standalone installer under `scripts/`.
-3. Add discipline-specific Python/Node dependencies to `pyproject.toml`/`package.json`.
-4. Document the skill in the table above.
-5. Tools shared across disciplines stay in the base package list in `scripts/setup-wsl.sh` and this file.
-
-## Output Directory Convention
-
-All reverse engineering work products must go in one of two locations:
-
-- **`tmp/`** -- Intermediate and throwaway side products: decompiled source, disassembly output, extracted contents, unpacked resources, Ghidra projects, scratch scripts, etc. This directory is in `.gitignore` and will not be committed. Create subdirectories freely (e.g., `tmp/ghidra_project/`, `tmp/extracted_sample/`).
-- **`artifacts/<identifier>/`** -- Final, requested deliverables: analysis reports, annotated code snippets, hook scripts, YARA rules, patch files, or anything the user explicitly asks to keep. Use a meaningful identifier as the subdirectory name (e.g., package namespace `com.example.app`, sample hash, malware family name). This directory is also in `.gitignore`: the difference from `tmp/` is durability, not tracking. Work here is meant to survive cleanup of `tmp/` and to be the thing handed back to the user, but it stays local unless the user asks to publish it elsewhere.
-
-When running tools, always direct output into `tmp/` rather than the repo root. Examples:
+Before using project tools, run:
 
 ```sh
-ghidraRun  # save project to tmp/ghidra_<sample>/
-r2 -A sample.bin  # any output files go to tmp/
-binwalk -e firmware.bin -C tmp/binwalk_firmware/
+source scripts/env.sh
 ```
 
-Never leave tool output in the repo root or in ad-hoc directories outside these two locations.
+Use `bash scripts/setup-wsl.sh` for the base toolset. Use `bash scripts/setup-wsl.sh --full` only when the optional cracking, FPGA, Arm, Wine, and `scrcpy` packages are needed.
 
-## Environment Structure
+Run `bash scripts/doctor.sh` before relying on the environment. A command is available only if setup installs it or the doctor finds it. Do not substitute tools from the upstream Nix catalog without installing them first.
 
-`scripts/setup-wsl.sh` installs Ubuntu packages, syncs the Python 3.13 `.venv` from `pyproject.toml` and `uv.lock`, installs Node.js dependencies from `package-lock.json`, and installs the latest official Ghidra release under `.tools/`. `scripts/env.sh` configures PATH, Ghidra's JDK, libusb, and the repo-local Java temporary directory. Nix is not used.
+## Handle samples safely
 
-## Installed Tools (General-Purpose)
+- Treat binaries, archives, installers, firmware, packet captures, and extracted scripts as untrusted.
+- Prefer static inspection before dynamic execution.
+- Do not execute a sample or enable active content unless the user explicitly requests it and the isolation boundary is understood.
+- Put source samples in `inputs/`.
+- Put extracted files, Ghidra projects, and other disposable output in `tmp/`.
+- Put reports, YARA rules, hooks, and other requested deliverables in `artifacts/<identifier>/`.
+- Record sample hashes and relevant tool versions in durable analysis reports.
 
-Discipline-specific tools are documented in their respective skill files. The tools below are available across all RE disciplines.
+## Use the installed tools
 
-### Native Binary Reverse Engineering
+The base setup installs the following command-line tools.
 
-| Tool | Command | Description |
-|------|---------|-------------|
-| Ghidra | `ghidraRun` | NSA's software reverse engineering suite with decompiler; supports x86, x64, ARM, ARM64, MIPS, and more |
-| radare2 | `r2 binary` | CLI-first RE framework for disassembly, analysis, patching, and debugging |
-| rizin | `rizin binary` | Modern radare2 fork with improved APIs and Ghidra decompiler integration via rz-ghidra |
-| binwalk | `binwalk firmware.bin` | Scan and extract embedded files, compressed streams, and filesystems from binaries |
+| Area | Commands |
+|---|---|
+| Triage | `file`, `sha256sum`, `strings`, `xxd`, `readelf`, `objdump`, `exiftool` |
+| Native analysis | `r2`, `binwalk`, `yara`, `upx`, `ghidraRun`, `analyzeHeadless` |
+| Android | `adb`, `fastboot`, `apktool`, `aapt`, `apksigner`, `apk-mitm` |
+| Windows formats | `cabextract`, `innoextract`, `msiextract`, `msiinfo`, `osslsigncode` |
+| Network and web | `tshark`, `nmap`, `http`, `protoc`, `mitmproxy`, `mitmdump`, `mitmweb` |
+| Dynamic instrumentation | `frida`, `frida-ps`, `frida-trace` |
+| Data and archives | `jq`, `sqlite3`, `openssl`, `7z`, `unzip` |
+| Hardware support | `lsusb`, `i2cdetect`, `ddcutil`, `edid-decode`, `v4l2-ctl` |
 
-### Dynamic Instrumentation
+The `--full` setup adds `hashcat`, `john`, `yosys`, `arm-none-eabi-gcc`, and `scrcpy`. On amd64 WSL it also installs `wine` and `winetricks` with i386 support. GPU acceleration for Hashcat depends on compatible Windows drivers and WSL GPU passthrough.
 
-| Tool | Command | Description |
-|------|---------|-------------|
-| frida-tools | `frida -p <pid> -l script.js` | Inject JavaScript into running processes for runtime hooking |
-| frida-tools | `frida-ps` | List running processes (add `-U` for USB device, `-R` for remote) |
-| frida-tools | `frida-trace -p <pid> -i "open*"` | Auto-generate handler stubs for traced functions |
+Ubuntu packages use distribution versions rather than the versions from the upstream Nix lock.
 
-### Static Analysis
+## Use the Python environment
 
-| Tool | Command | Description |
-|------|---------|-------------|
-| YARA | `yara rules.yar target/` | Match file patterns using YARA rules for malware identification |
+The locked Python environment includes:
 
-### Display / Monitor Firmware
+- General analysis: Capstone, cryptography, Frida, NumPy, Pillow, PyGhidra, PyUSB, SciPy, and YARA Python.
+- Android: hermes-dec and pyaxmlparser.
+- Windows: dnfile, LIEF, oletools, pefile, and Unicorn.
+- Web: Beautiful Soup, grpcio, grpcio-tools, haralyzer, and protobuf.
 
-| Tool | Command | Description |
-|------|---------|-------------|
-| edid-decode | `edid-decode slot.bin` | Parse and validate EDID base blocks plus CTA-861 / DisplayID extensions |
-| ddcutil | `ddcutil capabilities` / `ddcutil getvcp 0x60` | Query and set monitor settings over DDC/CI (VCP codes); requires a real attached display |
-| i2c-tools | `i2ctransfer -y N w5@0x37 ...` | Raw I2C frames; needed for 16-bit/vendor DDC/CI opcodes ddcutil won't emit |
-
-Both need the `i2c-dev` kernel module loaded (`sudo modprobe i2c-dev`) and RW access to
-`/dev/i2c-*`. WSL must also have the relevant hardware attached and exposed to Linux.
-
-### USB
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| usbutils | `lsusb -v -d 2e1a:` | Dump USB descriptors (configs, interfaces, endpoints) |
-| usbutils | `usbhid-dump -d 2e1a:` | Dump raw HID report descriptors straight from the device |
-| hid-tools | `hid-decode /sys/class/hidraw/hidraw0/device/report_descriptor` | Decode a HID report descriptor into named usages and report layouts |
-| hid-tools | `hid-recorder /dev/hidraw0` | Record live HID reports (descriptor plus timestamped traffic) |
-| hid-tools | `hid-replay recording.hid` | Replay a recording through a virtual uhid device |
-
-A vendor device often exposes several `/dev/hidraw*` nodes. Pick the one whose report
-descriptor starts with a vendor-defined usage page (`06 XX ff`); `hid-decode` names it for you.
-Reading and writing hidraw needs permission on the node: run as root, or add a udev rule such as
-`SUBSYSTEM=="hidraw", ATTRS{idVendor}=="14ed", ATTRS{idProduct}=="1012", MODE="0660", GROUP="users"`.
-Plain `open()` plus `select()` on the hidraw node is enough for feature-free report I/O; no
-extra Python binding is needed.
-
-Raw USB from Python uses `pyusb` over the libusb-1.0 backend. The environment discovers
-Ubuntu's shared library and exports `LIBUSB1_SO`; pass it explicitly when needed:
-
-```python
-import os, usb.core, usb.backend.libusb1 as lb
-be = lb.get_backend(find_library=lambda _: os.environ["LIBUSB1_SO"])
-dev = usb.core.find(idVendor=0x1234, idProduct=0x5678, backend=be)
-```
-
-Control and bulk transfers need write access to `/dev/bus/usb/*`: run as root, or add a
-udev rule for the target VID:PID. Note that a vendor device often changes VID:PID when it
-switches USB modes, so match on all of the identities it can present.
-
-### Password / Hash Cracking
-
-Put local wordlists and rules under the gitignored `wordlists/` directory. The larger cracking tools are installed by `bash scripts/setup-wsl.sh --full`; wordlist data is intentionally not downloaded automatically.
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| hashcat | `hashcat -m 0 -a 0 hash.txt wordlists/rockyou.txt -r wordlists/best64.rule` | GPU/CPU password recovery |
-| john | `john --wordlist=wordlists/rockyou.txt hash.txt` | John the Ripper (Jumbo); also bundles `*2john` converters (e.g. `zip2john`) |
-
-### FPGA Bitstream Analysis
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| Project Trellis | `ecpunpack in.bit out.config` | Unpack a Lattice ECP5 bitstream into a text config naming every tile, routing arc, and config word (handles compressed bitstreams) |
-| Project Trellis | `ecppack in.config out.bit` | Repack a text config into a bitstream |
-| Project Trellis | `ecpbram`, `ecppll` | Patch block-RAM contents; compute PLL parameters |
-| yosys | `yosys -p "read_verilog nl.v; ..."` | Netlist navigation: `select` cones (`%cie` stops at FFs = one pipeline stage), `submod`, `techmap`, `eval`, `sat` |
-| HAL | `hal` (pkg `hal-hardware-analyzer`) | Netlist RE framework: DANA register grouping, `resynthesis`, `netlist_preprocessing`, `solve_fsm` |
-
-The text config gives resource usage, I/O standards, and primitive modes without
-any netlist work. I/O standards are the fastest route to identifying external
-interfaces: SSTL15 implies DDR3, and the absence of differential inputs proves a
-part cannot receive TMDS. Note that the config carries block-RAM *settings*
-(`WID`, `CSDECODE`) but not block-RAM *contents*.
-
-**Never count instances by counting `enum:` lines** -- one block RAM or pin spans
-several tiles and each repeats the setting (gives 116 BRAMs on a 56-BRAM part).
-Count real hardware via the `pytrellis` routing graph instead. `pytrellis` is
-built for one specific Python version and needs *its own* database, or it fails
-with `RuntimeError: No such node`; its maps iterate as keys, not pairs.
-
-HAL needs structural Verilog plus a gate library (no BLIF/JSON frontend) and
-ships no Lattice library. Its `module_identification` plugin -- the one that finds
-adders and constant multipliers -- supports iCE40 and Xilinx only. yosys
-`fsm_detect`/`fsm_extract`/`memory_collect` produce *zero* output on a flattened
-netlist. Use `sat` as a fast falsifier, not a prover: refuting a wrong constant
-takes under a second, proving the right one may not finish.
-
-### Embedded / RP2040-RP2350 (Pico) Firmware
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| picotool | `picotool info -a firmware.uf2` | Inspect/convert RP2 UF2 firmware, read binary info and chip details |
-| pico-sdk | (via `PICO_SDK_PATH`) | Raspberry Pi Pico SDK; `PICO_SDK_PATH` is set automatically in the dev shell |
-| cmake | `cmake -B build` | Build system for pico-sdk projects |
-| gcc-arm-embedded | `arm-none-eabi-gcc` | ARM cross toolchain (`arm-none-eabi-{gcc,objcopy,gdb,...}`) |
-
-### Network Interception and Discovery
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| mitmproxy | `mitmproxy` / `mitmweb` / `mitmdump` | Intercept, inspect, and modify HTTPS traffic |
-| tshark | `tshark -i any -f "host 10.0.0.1"` | Capture and analyze network packets (Wireshark CLI) |
-| nmap | `nmap -p 9123 --open 10.42.0.0/22` | Host, port, and service discovery |
-| avahi | `avahi-browse -rt _elg._tcp` | Browse mDNS/DNS-SD services and resolve them to address and port |
-
-Find a network device before you scan for it. Most consumer hardware advertises
-itself over mDNS, so `avahi-browse -art` names the device and its port in one
-step. Use `nmap` when the device does not advertise, or when the service name is
-unknown. `avahi-browse` needs an mDNS daemon; under WSL, start `avahi-daemon` if systemd is enabled and multicast reaches the WSL network.
-
-### General Utilities
-
-`unzip`, `7z` (p7zip), `file`, `curl`, `jq`, `sqlite3`, `openssl` -- standard tools for archive extraction, file identification, HTTP fetching, JSON processing, database inspection, and certificate handling.
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| UPX | `upx -d packed.exe` | Decompress executables packed with UPX |
-| xxd | `xxd binary` | Hex dump / reverse hex dump utility |
-| binutils | `strings -n 8 file`, `nm`, `objdump`, `readelf` | Read strings, symbols, and ELF structure |
-| exiftool | `exiftool file` | Read/write embedded metadata (images, documents, firmware) |
-| innoextract | `innoextract -e -d out setup.exe` | Extract Inno Setup installers (common packaging for vendor firmware update tools) |
-| asar | `asar extract app.asar tmp/app/` | Unpack Electron `app.asar` archives (`asar list` to inspect first) |
-| uv | `uv add <pkg>` | Python package manager; updates `pyproject.toml`, `uv.lock`, and `.venv` |
-| npm | `npm install <pkg>` | Node.js package manager; updates `package.json`, `package-lock.json`, and `node_modules` |
-
-### Python Scripting Environment
-
-Python dependencies are managed via `pyproject.toml` and `uv.lock` and installed by uv into `.venv`. The following general-purpose libraries are pre-installed:
-
-| Library | Import | Description |
-|---------|--------|-------------|
-| frida | `import frida` | Python API for Frida dynamic instrumentation |
-| pyghidra | `import pyghidra` | Python API for Ghidra; run headless analysis, access the decompiler, and script Ghidra entirely from Python via JPype |
-| yara-python | `import yara` | Compile and apply YARA rules from Python |
-| IPython | `ipython` | Enhanced interactive Python shell for exploratory analysis |
-| NumPy | `import numpy` | Array/numeric computing (byte-array math, entropy, correlation) |
-| SciPy | `import scipy` | Scientific computing (FFT, signal processing, optimization) |
-| Pillow | `from PIL import Image` | Image loading/manipulation (extracted textures, QR, framebuffers) |
-| pyusb | `import usb.core` | Raw USB control/bulk/interrupt transfers (see [USB](#usb) for the libusb backend) |
-| capstone | `import capstone` | Disassembler for x86, x64, ARM, ARM64, MIPS, and more; disassemble a few bytes without a Ghidra run |
-| cryptography | `from cryptography.hazmat.primitives.asymmetric...` | Signature and cipher primitives (Ed25519, ECDSA, RSA, AES) for firmware signature checks |
-
-Use `capstone` for a quick look at a small number of instructions, for example to
-identify a patch site or to read a function prologue. Ghidra gives better results
-on a full image, but a large blob can need more than an hour to analyze.
-
-Discipline-specific Python libraries are listed in their respective skill files. To add a Python package permanently, run `uv add <package>`. See [Augmenting the Environment](#augmenting-the-environment).
-
-### Node.js Scripting Environment
-
-Node.js dependencies are managed via `package.json` and `package-lock.json` and installed into `node_modules` by npm. `scripts/env.sh` puts their bin scripts on PATH.
-
-Discipline-specific Node.js tools are listed in their respective skill files. To add a Node.js package permanently, run `npm install <package>`. See [Augmenting the Environment](#augmenting-the-environment).
-
-## Common Workflows
-
-### Binary analysis with Ghidra
+Run scripts through the configured environment:
 
 ```sh
-# GUI (requires display server on headless/WSL)
-ghidraRun  # import binary, save project to tmp/
-
-# Headless analysis
-analyzeHeadless tmp/ghidra_project ProjectName -import binary -postScript script.java
+uv run --frozen python path/to/script.py
 ```
 
-### Scripted Ghidra analysis with pyghidra
+The setup pins PyGhidra 3.0.2 and Ghidra 12.1.3. PyGhidra 3 requires Ghidra 12 or newer. Open a program from an imported Ghidra project with the PyGhidra 3 project API:
 
-`pyghidra.start()` requires `GHIDRA_INSTALL_DIR` to point at the Ghidra install. The dev shell sets this automatically (along with `GHIDRA_JAVA_HOME`), so `import pyghidra; pyghidra.start()` works directly -- no manual `export GHIDRA_INSTALL_DIR=...` prefix needed.
-
-The shell also exports `_JAVA_OPTIONS=-Djava.io.tmpdir=$PWD/tmp/jtmp`, which moves JVM scratch
-files off the shared `/tmp` tmpfs. Without it, `pyghidra.start()` fails on large programs. Every
-`java` process prints a `Picked up _JAVA_OPTIONS:` line to stderr as a result; ignore it.
-
-One thing the shell cannot set for you: raise the Python recursion limit **before**
-`pyghidra.start()`, or JPype's type construction hits the default limit and aborts.
+```sh
+analyzeHeadless tmp/ghidra sample -import inputs/sample.exe
+```
 
 ```python
-import sys
-sys.setrecursionlimit(100000)
+from pathlib import Path
 
 import pyghidra
 
-# Start the Ghidra JVM (once per session)
 pyghidra.start()
-
-# Open a binary, auto-analyze, and access the Flat API
-with pyghidra.open_program("binary", project_location="tmp/ghidra_project") as flat_api:
-    program = flat_api.getCurrentProgram()
-    listing = program.getListing()
-    # iterate functions, read decompiled code, etc.
-
-# Or run a Ghidra script (.java/.py) against a binary
-pyghidra.run_script("binary", "script.java", project_location="tmp/ghidra_project")
+project = pyghidra.open_project(Path("tmp/ghidra"), "sample")
+try:
+    with pyghidra.program_context(project, "/sample.exe") as program:
+        print(program.getName())
+finally:
+    project.close()
 ```
 
-### Quick CLI disassembly
+Do not use the deprecated `pyghidra.open_program()` helper in future scripts.
+
+## Start with static triage
+
+Create a working directory and record the sample identity:
 
 ```sh
-# radare2
-r2 -A binary
-# rizin
-rizin -A binary
+mkdir -p tmp/sample
+sha256sum inputs/sample.exe
+file inputs/sample.exe
+exiftool inputs/sample.exe
+strings -a -n 6 inputs/sample.exe | head -n 200
 ```
 
-### Network traffic interception
+Use radare2 for command-line native-code inspection:
 
 ```sh
-# Start mitmproxy, configure target to use proxy
-mitmproxy --listen-port 8080
-
-# Or capture raw packets
-tshark -i any -w tmp/capture.pcap
+r2 -AA inputs/sample.exe
 ```
 
-### Adding Python packages with uv
-
-Python dependencies are managed through `pyproject.toml` and installed into `.venv` by uv. To add a package:
+Use Ghidra headlessly when decompilation or cross-reference analysis is needed:
 
 ```sh
-# Add a dependency (updates pyproject.toml and uv.lock)
-uv add protobuf
-
-# uv updates the lockfile and active .venv in the same command
-uv sync --frozen --link-mode copy
+analyzeHeadless tmp/ghidra sample -import inputs/sample.exe
 ```
 
-For temporary/one-off usage without modifying the project, use `uv run`:
+Scan firmware or composite files with Binwalk:
 
 ```sh
-# Run a one-off script with a dependency not in the environment
-uv run --with cryptography script.py
-
-# Start a REPL with extra packages available
-uv run --with pycryptodome ipython
+binwalk inputs/firmware.bin
 ```
 
-### Adding Node.js packages with npm
+Extract only into `tmp/`, then treat every extracted file as untrusted.
 
-Node.js dependencies are managed through `package.json` and installed into `node_modules` by npm. To add a package:
+## Inspect USB devices
+
+`scripts/env.sh` resolves `LIBUSB1_SO` without assuming an x86-64 host. Confirm the device is attached to WSL before using PyUSB:
+
+```python
+import os
+
+import usb.backend.libusb1
+import usb.core
+
+backend = usb.backend.libusb1.get_backend(
+    find_library=lambda _: os.environ["LIBUSB1_SO"]
+)
+for device in usb.core.find(find_all=True, backend=backend):
+    print(f"{device.idVendor:04x}:{device.idProduct:04x}")
+```
+
+## Do not assume unbundled tools exist
+
+The repository does not package the following upstream tools:
+
+- General and hardware: rizin, asar, hid-tools, picotool, Pico SDK, Project Trellis, and HAL.
+- Android: jadx, dex2jar, Bytecode Viewer, APKiD, APKEditor, bundletool, aapt2, jnitrace, trueseeing, quark-engine, koodousfinder, simg2img, sdat2img, payload-dumper-go, and imgpatchtools.
+- Windows: PE-bear, Detect It Easy, ImHex, FLOSS, ILSpy, and Volatility.
+- Web: protoscope, grpcurl, grpcui, curl-impersonate, websocat, and pup.
+- Data: `wordlists/rockyou.txt` and other password dictionaries.
+
+Install an unbundled tool for the specific task before using its command. Do not present its output as part of the standard `re-wsl` environment.
+
+## Keep agent guidance synchronized
+
+Domain-specific guidance is stored in both `.agents/skills/` and `.claude/skills/`. The copies must remain byte-identical. After changing either tree, run:
 
 ```sh
-# Add a dependency (updates package.json and package-lock.json)
-npm install some-tool
-
-# Reproduce the lockfile exactly on another machine
-npm ci
+bash scripts/check-skill-sync.sh
 ```
-
-Bin scripts from installed packages are automatically available on PATH (e.g., installing a package that provides a CLI tool makes it directly runnable).
-
-For temporary/one-off usage without modifying the project, use `npx`:
-
-```sh
-# Run a one-off tool without installing
-npx some-tool@latest
-```
-
-## Augmenting the Environment
-
-When a task calls for a tool or library not currently in the dev shell, you have several options:
-
-### Temporary: ad-hoc install
-
-- **Python**: `uv run --with <pkg>` for one-off exploration. See [uv workflow above](#adding-python-packages-with-uv).
-- **Node.js**: `npx <pkg>` for one-off CLI tools. See [npm workflow above](#adding-nodejs-packages-with-npm).
-
-### Permanent: add to the environment
-
-**For Python libraries**, use uv to add them to `pyproject.toml`:
-
-1. Run `uv add <package>` (updates `pyproject.toml` and `uv.lock`).
-2. Verify with `uv sync --frozen --link-mode copy` and `bash scripts/doctor.sh`.
-3. If the package needs native libraries, add the corresponding Ubuntu package to `scripts/setup-wsl.sh`.
-4. **Update the appropriate skill file or `CLAUDE.md`** to document the new library.
-
-**For Node.js packages**, use npm to add them to `package.json`:
-
-1. Run `npm install <package>` (updates `package.json` and `package-lock.json`).
-2. Run `npm ci` to verify the lockfile can reproduce `node_modules`.
-3. **Update the appropriate skill file or `CLAUDE.md`** to document the new tool.
-
-**For non-Python/non-Node tools**, use an Ubuntu package when available:
-
-1. Check `apt-cache policy <package>` in WSL.
-2. Add the package to the base or full list in `scripts/setup-wsl.sh`.
-3. For tools absent from Ubuntu, add a versioned installer under `scripts/` that installs into the gitignored `.tools/` directory and verifies a published checksum when available.
-4. Rerun setup and update the appropriate skill file or `CLAUDE.md`.
-
-You are encouraged to update `scripts/setup-wsl.sh`, `pyproject.toml`, `package.json`, skill files, and this file whenever the analysis requires a tool that should be part of the standard environment.
-
-**Important:** When documenting a new tool, verify the actual binary name with `command -v <command>`. Ubuntu package names and installed binaries often differ.
-
-## Notes
-
-- Ghidra's GUI uses WSLg when available. On headless WSL systems, use `analyzeHeadless`.
-- Frida requires a matching `frida-server` binary running on the target (device or host).

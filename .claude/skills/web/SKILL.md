@@ -1,163 +1,126 @@
 ---
-name: web-re
+name: web
+description: Analyze HTTP traffic, HAR files, APIs, WebSockets, Protocol Buffers, and network captures with the tools installed by re-wsl.
 user-invocable: false
-description: >
-  Web reverse engineering tools and workflows. Auto-activates when context involves
-  protobuf, gRPC, HAR files, HTTP API analysis, WebSocket, web scraping, TLS fingerprinting,
-  curl-impersonate, or web protocol reverse engineering.
 ---
 
-# Web Reverse Engineering
+# Web reverse engineering
 
-This skill covers web-specific RE tools available in the dev shell. For general-purpose tools (mitmproxy, tshark, jq, etc.), see `CLAUDE.md`.
+Use this skill for Hypertext Transfer Protocol (HTTP) traffic, HTTP Archive (HAR) files, application programming interfaces (APIs), WebSockets, Protocol Buffers, packet captures, and authorized proxy testing.
 
-## Protocol Buffers & gRPC
+## Confirm the environment
 
-| Tool | Command | Description |
-|------|---------|-------------|
-| protoc | `protoc --decode_raw < message.bin` | Compile .proto files and decode protobuf messages |
-| protoscope | `protoscope < message.bin` | Inspect raw protobuf wire format without .proto definitions |
-| grpcurl | `grpcurl -plaintext localhost:50051 list` | CLI client for gRPC services with reflection support |
-| grpcui | `grpcui -plaintext localhost:50051` | Web UI for interacting with gRPC services |
-
-## HTTP & TLS
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| curl-impersonate | `curl_chrome142 https://example.com` | Curl with browser TLS fingerprints to bypass bot detection |
-| httpie | `http GET https://api.example.com/endpoint` | User-friendly HTTP client for API exploration |
-
-## WebSocket
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| websocat | `websocat ws://localhost:8080/ws` | CLI WebSocket client for bidirectional communication |
-
-## HTML Parsing
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| pup | `cat page.html \| pup 'div.content text{}'` | CLI HTML parser (like jq for HTML); uses CSS selectors |
-
-## Web Python Libraries
-
-| Library | Import | Description |
-|---------|--------|-------------|
-| protobuf | `from google.protobuf import descriptor_pb2` | Python protobuf runtime for parsing and generating messages |
-| grpcio | `import grpc` | gRPC Python client for interacting with gRPC services |
-| grpcio-tools | `from grpc_tools import protoc` | protoc plugin for Python gRPC code generation |
-| beautifulsoup4 | `from bs4 import BeautifulSoup` | HTML/XML parsing for web scraping and response analysis |
-| haralyzer | `from haralyzer import HarParser` | Parse and analyze HAR (HTTP Archive) files |
-
-## Workflows
-
-### Decode unknown protobuf messages
+Before analysis, run:
 
 ```sh
-# Inspect raw wire format (no .proto needed)
-protoscope < message.bin
-
-# Decode with protoc (raw mode, no .proto needed)
-protoc --decode_raw < message.bin
+source scripts/env.sh
+bash scripts/doctor.sh
 ```
 
-### Decode protobuf with .proto definitions
+The base environment provides mitmproxy, mitmdump, mitmweb, tshark, nmap, HTTPie, curl, the Protocol Buffers compiler (`protoc`), grpcio, grpcio-tools, protobuf, haralyzer, and Beautiful Soup.
+
+The environment does not package protoscope, grpcurl, grpcui, curl-impersonate, websocat, or pup. Install one of those tools before using its command.
+
+## Triage captures
+
+Record the source hash before analysis:
 
 ```sh
-# Compile .proto to Python
-protoc --python_out=tmp/ schema.proto
-
-# Decode a specific message type
-protoc --decode=MyMessage schema.proto < message.bin
+mkdir -p tmp/web
+sha256sum inputs/capture.har
+file inputs/capture.har
 ```
 
-### Explore gRPC services
+For packet captures, summarize protocols and conversations:
 
 ```sh
-# List available services (requires server reflection)
-grpcurl -plaintext localhost:50051 list
-
-# Describe a service
-grpcurl -plaintext localhost:50051 describe my.Service
-
-# Call an RPC method
-grpcurl -plaintext -d '{"field": "value"}' localhost:50051 my.Service/Method
-
-# Interactive web UI
-grpcui -plaintext localhost:50051
+tshark -r inputs/capture.pcapng -q -z io,phs
+tshark -r inputs/capture.pcapng -q -z conv,tcp
 ```
 
-### Analyze HAR files
+Extract selected HTTP fields without replaying traffic:
+
+```sh
+tshark -r inputs/capture.pcapng -Y http.request \
+  -T fields -e frame.number -e ip.dst -e http.host -e http.request.method -e http.request.uri
+```
+
+## Inspect HAR files with Python
+
+Use haralyzer for structured request and response inspection:
 
 ```python
 import json
+
 from haralyzer import HarParser
 
-with open("traffic.har") as f:
-    har = HarParser(json.load(f))
+with open("inputs/capture.har", encoding="utf-8") as handle:
+    parser = HarParser(json.load(handle))
 
-for page in har.pages:
-    print(f"Page: {page.title}")
-    print(f"  Entries: {len(page.entries)}")
-    print(f"  Total size: {page.page_size}")
-
-# Inspect individual entries
-for entry in har.pages[0].entries:
-    print(f"{entry.request.method} {entry.request.url} -> {entry.response.status}")
+for page in parser.pages:
+    for entry in page.entries:
+        request = entry["request"]
+        print(request["method"], request["url"])
 ```
 
-### curl-impersonate for bot-protected APIs
+Run the example with `uv run --frozen python`.
+
+Redact authorization headers, cookies, tokens, personal data, and request bodies before placing excerpts in `artifacts/`.
+
+## Inspect Protocol Buffers
+
+Compile a known schema to Python:
 
 ```sh
-# Impersonate Chrome's TLS fingerprint
-curl_chrome142 -H "Accept: application/json" https://api.example.com/data
-
-# Impersonate Firefox
-curl_firefox144 https://example.com
-
-# Use with mitmproxy for inspection
-curl_chrome142 --proxy http://127.0.0.1:8080 https://api.example.com/data
-
-# Generic wrapper (auto-selects a browser profile)
-curl-impersonate https://example.com
+mkdir -p tmp/web/proto
+protoc --python_out=tmp/web/proto path/to/schema.proto
 ```
 
-### WebSocket interception
+Use `python -m grpc_tools.protoc` when gRPC stubs are also needed:
 
 ```sh
-# Connect to a WebSocket endpoint
-websocat ws://localhost:8080/ws
-
-# Pipe data through (stdin -> WS, WS -> stdout)
-echo '{"type":"subscribe","channel":"events"}' | websocat ws://localhost:8080/ws
-
-# Use with mitmproxy for WS interception
-# mitmproxy supports WebSocket natively; configure target to use proxy
+uv run --frozen python -m grpc_tools.protoc \
+  -I path/to/protos \
+  --python_out=tmp/web/proto \
+  --grpc_python_out=tmp/web/proto \
+  path/to/protos/service.proto
 ```
 
-### HTML scraping and analysis
+Do not claim an unknown binary payload is Protocol Buffers without schema evidence or a documented inference.
+
+## Send authorized test requests
+
+Use HTTPie or curl for explicit, bounded requests:
 
 ```sh
-# Extract all links from a page
-curl -s https://example.com | pup 'a attr{href}'
-
-# Extract specific content by CSS selector
-curl -s https://example.com | pup 'div.main-content text{}'
-
-# From Python with BeautifulSoup
-python3 -c "
-from bs4 import BeautifulSoup
-import urllib.request
-html = urllib.request.urlopen('https://example.com').read()
-soup = BeautifulSoup(html, 'html.parser')
-for link in soup.find_all('a'):
-    print(link.get('href'))
-"
+http GET https://example.test/api/status
+curl --fail-with-body --silent --show-error https://example.test/api/status
 ```
 
-## Notes
+Do not replay captured credentials or mutate a production service unless the user explicitly authorizes the target and action.
 
-- mitmproxy can export HAR files: use `mitmdump -w tmp/traffic.har --set hardump=tmp/traffic.har` or the mitmweb UI export.
-- curl-impersonate provides browser-specific binaries named by browser version (e.g., `curl_chrome142`, `curl_firefox144`, `curl_safari260`). The generic `curl-impersonate` wrapper auto-selects a profile. Run `ls $(dirname $(which curl-impersonate))` to see all available profiles.
-- grpcui requires a display server (opens a browser). On headless/WSL, use grpcurl for CLI access or forward the port.
-- `blackboxprotobuf` is excluded from the environment because it hard-pins `protobuf==3.10.0`, which is incompatible with modern grpcio-tools. Use `protoscope` or `protoc --decode_raw` for schema-less protobuf decoding instead.
+## Run an authorized proxy
+
+Start an interactive proxy:
+
+```sh
+mitmproxy --set confdir="$RE_SHELL_ROOT/tmp/mitmproxy"
+```
+
+For scriptable or headless capture, use `mitmdump` and write flows under `tmp/`:
+
+```sh
+mitmdump --set confdir="$RE_SHELL_ROOT/tmp/mitmproxy" -w tmp/web/flows.mitm
+```
+
+Installing the mitmproxy certificate changes trust behavior. Do so only on an authorized test device or profile.
+
+## Report results
+
+Put durable output in `artifacts/<identifier>/`. Include:
+
+- Capture hashes and collection context.
+- Hosts, endpoints, methods, protocols, schemas, and authentication mechanisms.
+- Relevant request and response patterns with secrets redacted.
+- The commands and tool versions used.
+- A clear distinction between captured evidence, replayed behavior, and inference.

@@ -56,15 +56,23 @@ if [[ -z "${GHIDRA_JAVA_HOME:-}" ]] && command -v java >/dev/null 2>&1; then
   export GHIDRA_JAVA_HOME
 fi
 
-if [[ -z "${LIBUSB1_SO:-}" ]] && command -v ldconfig >/dev/null 2>&1; then
-  LIBUSB1_SO="$(ldconfig -p 2>/dev/null | awk '/libusb-1\.0\.so\.0 .*x86-64/ {path=$NF} END {print path}')"
-  if [[ -n "$LIBUSB1_SO" ]]; then
+if [[ -z "${LIBUSB1_SO:-}" ]]; then
+  if command -v ldconfig >/dev/null 2>&1; then
+    LIBUSB1_SO="$(ldconfig -p 2>/dev/null | awk '/libusb-1\.0\.so\.0/ {print $NF; exit}')"
+  fi
+  if [[ -z "${LIBUSB1_SO:-}" ]]; then
+    for _re_shell_libusb in \
+      /lib/x86_64-linux-gnu/libusb-1.0.so.0 \
+      /lib/aarch64-linux-gnu/libusb-1.0.so.0; do
+      if [[ -e "$_re_shell_libusb" ]]; then
+        LIBUSB1_SO="$_re_shell_libusb"
+        break
+      fi
+    done
+  fi
+  if [[ -n "${LIBUSB1_SO:-}" ]]; then
     export LIBUSB1_SO
   fi
-fi
-
-if [[ -z "${PICO_SDK_PATH:-}" && -d /opt/pico-sdk ]]; then
-  export PICO_SDK_PATH=/opt/pico-sdk
 fi
 
 mkdir -p "$RE_SHELL_ROOT/tmp/jtmp"
@@ -76,6 +84,6 @@ esac
 export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
 export PATH
 
-unset _re_shell_script _re_shell_ghidra _re_shell_java
+unset _re_shell_script _re_shell_ghidra _re_shell_java _re_shell_libusb
 unset -f _re_shell_prepend_path
 unset -f _re_shell_resolve_ghidra_install_dir _re_shell_find_ghidra_install_dir

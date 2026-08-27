@@ -26,3 +26,11 @@
 *.exe
 *.so
 *.uf2
+*.dll
+*.bin
+*.dex
+*.jar
+*.msi
+*.har
+*.pcap
+*.pcapng

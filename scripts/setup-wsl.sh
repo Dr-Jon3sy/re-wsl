@@ -21,6 +21,7 @@ Options:
 Ghidra discovery:
   GHIDRA_INSTALL_DIR  Installation directory or path to ghidraRun
   GHIDRA_PATH         Installation directory or path to ghidraRun
+  GITHUB_TOKEN        Optional token for the secondary release-metadata check
 EOF
 }
 
@@ -35,8 +36,13 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
-if ! grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
+kernel_release="$(uname -r)"
+if [[ ! "$kernel_release" =~ [Mm]icrosoft ]]; then
   printf 'This setup script is intended for WSL2.\n' >&2
+  exit 1
+fi
+if [[ ! "$kernel_release" =~ [Mm]icrosoft-standard-WSL2 ]]; then
+  printf 'WSL1 is not supported. Upgrade this distribution to WSL2 first.\n' >&2
   exit 1
 fi
 if [[ "$EUID" -eq 0 ]]; then
@@ -44,7 +50,7 @@ if [[ "$EUID" -eq 0 ]]; then
   exit 1
 fi
 if ! command -v uv >/dev/null 2>&1; then
-  printf 'uv is required. Install it first: https://docs.astral.sh/uv/\n' >&2
+  printf 'uv is required. See https://docs.astral.sh/uv/.\n' >&2
   exit 1
 fi
 
@@ -67,33 +73,54 @@ fi
 
 base_packages=(
   build-essential pkg-config cmake libusb-1.0-0 libusb-1.0-0-dev
-  nodejs npm default-jdk
+  nodejs npm openjdk-21-jdk
   radare2 binwalk yara tshark nmap avahi-utils
-  unzip p7zip-full binutils file curl jq sqlite3 openssl upx-ucl xxd
-  libimage-exiftool-perl innoextract v4l-utils ddcutil i2c-tools usbutils
+  unzip p7zip-full binutils file curl jq ripgrep sqlite3 openssl upx-ucl xxd
+  libimage-exiftool-perl innoextract v4l-utils edid-decode ddcutil i2c-tools usbutils
   apktool apksigner aapt adb fastboot
   cabextract msitools osslsigncode protobuf-compiler httpie
 )
-full_packages=(
-  hashcat john yosys gcc-arm-none-eabi wine64 winetricks scrcpy
-)
+full_packages=(hashcat john yosys gcc-arm-none-eabi scrcpy)
 
 if [[ "$skip_system" == false ]]; then
+  architecture="$(dpkg --print-architecture)"
+  if [[ "$full" == true && "$architecture" == amd64 ]] && \
+     ! dpkg --print-foreign-architectures | grep -qx i386; then
+    printf 'Enabling i386 packages for 32-bit Wine support...\n'
+    sudo dpkg --add-architecture i386
+  fi
+
   sudo apt-get update
+  if ! apt-cache show radare2 >/dev/null 2>&1 || \
+     ! apt-cache show openjdk-21-jdk >/dev/null 2>&1; then
+    printf 'Enabling the Ubuntu universe component...\n'
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common
+    sudo add-apt-repository -y universe
+    sudo apt-get update
+  fi
+
   requested_packages=("${base_packages[@]}")
   if [[ "$full" == true ]]; then
     requested_packages+=("${full_packages[@]}")
+    if [[ "$architecture" == amd64 ]]; then
+      requested_packages+=(wine64 wine32:i386 winetricks)
+    else
+      printf 'Info: skipping Wine because the automated Wine setup supports amd64 WSL only.\n' >&2
+    fi
   fi
 
-  available_packages=()
+  unavailable_packages=()
   for package_name in "${requested_packages[@]}"; do
-    if apt-cache show "$package_name" >/dev/null 2>&1; then
-      available_packages+=("$package_name")
-    else
-      printf 'Warning: Ubuntu package is unavailable: %s\n' "$package_name" >&2
+    if ! apt-cache show "$package_name" >/dev/null 2>&1; then
+      unavailable_packages+=("$package_name")
     fi
   done
-  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${available_packages[@]}"
+  if [[ "${#unavailable_packages[@]}" -gt 0 ]]; then
+    printf 'Required Ubuntu packages are unavailable: %s\n' "${unavailable_packages[*]}" >&2
+    printf 'Check that this is a supported Ubuntu release and that universe is enabled.\n' >&2
+    exit 1
+  fi
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${requested_packages[@]}"
 fi
 
 cd "$repo_root"
@@ -104,7 +131,7 @@ if command -v npm >/dev/null 2>&1; then
   printf '\nInstalling locked Node.js dependencies...\n'
   npm ci
 else
-  printf 'npm is missing; rerun without --skip-system after fixing apt.\n' >&2
+  printf 'npm is required. Install it or rerun without --skip-system.\n' >&2
   exit 1
 fi
 
@@ -121,5 +148,9 @@ fi
 # shellcheck source=env.sh
 source "$repo_root/scripts/env.sh"
 printf '\nSetup complete. Enter the environment with:\n  source scripts/env.sh\n'
-printf 'Or launch a configured subshell with:\n  bash scripts/enter.sh\n\n'
-bash "$repo_root/scripts/doctor.sh"
+printf 'Or launch a configured Bash subshell with:\n  bash scripts/enter.sh\n\n'
+doctor_args=()
+if [[ "$full" == true ]]; then
+  doctor_args+=(--full)
+fi
+bash "$repo_root/scripts/doctor.sh" "${doctor_args[@]}"

@@ -28,7 +28,7 @@ For a first-time or dependency setup, run `bash scripts/setup-wsl.sh`. Use `bash
 - Do not put analysis output in the repository root.
 - Prefer static inspection before dynamic execution. Record hashes and relevant tool versions in final analysis artifacts.
 
-The detailed general-purpose tool catalog and workflows live in `CLAUDE.md`. Despite that legacy filename, its environment and tool instructions apply equally to Codex. Domain-specific Codex skills are available under `.agents/skills/`:
+The verified general-purpose tool catalog and workflows live in `CLAUDE.md`. Despite that legacy filename, its environment and tool instructions apply equally to Codex. Do not assume an upstream Nix tool is installed unless the catalog or `scripts/doctor.sh` confirms it. Domain-specific Codex skills are available under `.agents/skills/`:
 
 - `.agents/skills/android/SKILL.md`
 - `.agents/skills/windows/SKILL.md`
@@ -51,12 +51,13 @@ For configuration changes, run the relevant checks:
 
 ```sh
 bash -n scripts/*.sh
+bash scripts/check-skill-sync.sh
 uv lock --check
 npm audit
 bash scripts/doctor.sh
 ```
 
-If setup behavior changed, also run the narrowest safe idempotency check that covers it. Do not claim a tool works merely because it is listed; verify its command or import when practical.
+If setup behavior changed, also run the narrowest safe idempotency check that covers it. Run `bash scripts/doctor.sh --full` when the optional packages are installed. Do not claim a tool works merely because it is listed; verify its command or import when practical.
 
 ## Repository Hygiene
 

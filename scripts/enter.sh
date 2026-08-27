@@ -7,5 +7,7 @@ cd "$repo_root"
 # shellcheck source=env.sh
 source "$repo_root/scripts/env.sh"
 
-printf 're-shell ready at %s\n' "$RE_SHELL_ROOT"
-exec "${SHELL:-/bin/bash}" -i
+printf 're-wsl ready at %s\n' "$RE_SHELL_ROOT"
+# Avoid user startup files resetting the configured PATH. All exported values
+# from env.sh are inherited by this clean interactive Bash session.
+exec /bin/bash --norc -i
